@@ -39,6 +39,12 @@ bool brakeFailMIL;
 bool etcActiveBL;
 bool etcDisabled;
 
+//READING THE RX8 PEDAL
+const int X_pin = 0; // analog pin connected to sensor 1
+const int Y_pin = 1; // analog pin connected to sensor 2
+
+int xReadingsCurve[] = {200, 550};
+int yReadingsCurve[] = {350, 550};
 
 MCP_CAN CAN0(10); // Set CS to pin 10
 
@@ -244,8 +250,41 @@ byte getRPMMsgValue(int RPM){
   return RPMCode;
 }
 
+int convertAccReadingToRPM(int reading){
+  /*
+   * Convert a reading coming from the rx-8 accelerator pedal to an rpm value
+   * This amounts to transposing a value in the domain [350 -> 550] to a value
+   * in the range [0 -> 9000]
+   */
+
+   //Find the domain by subtracting the min from the max of the domain list
+   int domainMin = xReadingsCurve[0];
+   int domainMax = xReadingsCurve[1];
+
+   int domain = domainMax - domainMin;
+
+   int rangeMax = 9000;
+   int rangeMin = 0;
+
+   int range = rangeMax - rangeMin;
+
+   long a = reading - domainMin;
+   long b = a*range;
+   long c = b / domain;
+   long d = c + rangeMin;
+
+   long rpm = ((a * range) / domain) + rangeMin;
+
+   Serial.println(rpm);
+   return int(rpm);
+   
+}
+
 void loop() 
 {
+
+    int xReading = analogRead(X_pin);
+    int yReading = analogRead(Y_pin);
     // StatusMIL
     engTemp         = 145;
     odo             = 0;
@@ -262,7 +301,8 @@ void loop()
 
 
     // StatusPCM
-    engRPM          = getRPMMsgValue(2000);    // RPM  Value*67 gives 8500 RPM Reading Redline is 127
+    int rpm         = convertAccReadingToRPM(xReading);  //calculate the rpm to send to the can
+    engRPM          = getRPMMsgValue(rpm);    // RPM  Value*67 gives 8500 RPM Reading Redline is 127
     vehicleSpeed    = getSpeedMsgValue(90);    // Speed  Value=0.63*(Speed)+38.5
 
     updatePCM();
