@@ -86,6 +86,7 @@ unsigned char otmp[8]       = {255,255,255,255,255,255,255,255};                
 unsigned char statusPCM[8]  = {125,0,0,0,156,0,0,0};                            // Write to 201
 unsigned char statusMIL[8]  = {140,0,0,0,0,0,0,0};                              // Write to 420
 unsigned char statusDSC[8]  = {0,0,0,0,0,0,0,0};                                // Write to 212
+unsigned char statusPS[8]   = {0,0,0,0,0,0,0,0};                                // Write to 300
 
 unsigned char statusEPS1[8] = {0x00,0x00,0xFF,0xFF,0x00,0x32,0x06,0x81};        // Write to 200 0x00 00 FF FF 00 32 06 81
 unsigned char statusEPS2[8] = {0x89,0x89,0x89,0x19,0x34,0x1F,0xC8,0xFF};        // Write to 202 0x89 89 89 19 34 1F C8 FF
@@ -165,6 +166,15 @@ void updatePCM()
 {
     statusPCM[0] = engRPM;
     statusPCM[4] = vehicleSpeed;
+}
+
+void updatePS(bool on){
+  if (on == true){
+    statusPS[0] = 128;
+  }else{
+    statusPS[0] = 0;
+  };
+  Serial.println(statusPS[0]);
 }
 
 void updateDSC()
@@ -320,10 +330,10 @@ void loop()
     CAN0.sendMsgBuf(0x212, 0, 8, statusDSC);
     delay(10);
 
+    updatePS(false);
+    CAN0.sendMsgBuf(0x300, 0, 8, statusPS);
+    delay(10);
 /*
-    CAN0.sendMsgBuf(0x200, 0, 8, statusEPS1);
-    delay(10);            
-
     CAN0.sendMsgBuf(0x202, 0, 8, statusEPS2);
     delay(10);    
            
