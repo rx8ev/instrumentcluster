@@ -3,7 +3,7 @@ This is an arduino code to control the Rx8 instrument cluster using the CAN bus.
 This code is based on the code described here:
 https://www.chamberofunderstanding.co.uk/2018/07/12/rx8-project-part-13-canbus-3-labview/
 
-##Fuel Gauge
+## Fuel Gauge
 (This is a work in progress)
 The RX8 uses a saddle shaped fuel tank to allow it to clear the driveshaft and so it has two senders denoted as ‘main’ and ‘sub’.
 
