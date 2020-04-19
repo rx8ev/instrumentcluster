@@ -16,6 +16,18 @@
 #define LED2 8
 #define LED3 7
 
+//Fuel Gauge -- designed to be used with L293D chip
+#define FUEL_GAUGE_ENABLE 5
+//need to tell the chip which way the current is flowing.
+//We're using 'direction A'
+#define FUEL_GAUGE_DIRECTIONA 3
+#define FUEL_GAUGE_DIRECTIONB 4
+
+//positions, (as indicated on the gauge)
+int FUEL_GAUGE_EMPTY=100;
+int FUEL_GAUGE_HALF=150;
+int FUEL_GAUGE_FULL=250;
+
 #define NOP __asm__ ("nop\n\t")
 
 // Variables for StatusMIL
@@ -54,10 +66,20 @@ void setup()
     Serial.begin(9600);
     Serial.println("Init…");
     Serial.println("Setup pins");
+
+    //Pins for the fuel gauge. 2 Directions and 1 enable.
+    //Set dierection A as high
+    pinMode(FUEL_GAUGE_ENABLE,OUTPUT);
+    pinMode(FUEL_GAUGE_DIRECTIONA,OUTPUT);
+    pinMode(FUEL_GAUGE_DIRECTIONB,OUTPUT);
+    digitalWrite(FUEL_GAUGE_DIRECTIONA,HIGH); //one way
+    digitalWrite(FUEL_GAUGE_DIRECTIONB,LOW);
+
     
     pinMode(LED2, OUTPUT);
     pinMode(LED3, OUTPUT);
     pinMode(CANint, INPUT);
+   
 
     //Serial.println("Enable pullups");
     digitalWrite(LED2, LOW);
@@ -333,6 +355,9 @@ void loop()
     updatePS(false);
     CAN0.sendMsgBuf(0x300, 0, 8, statusPS);
     delay(10);
+
+    analogWrite(FUEL_GAUGE_ENABLE,FUEL_GAUGE_HALF); //half speed
+
 /*
     CAN0.sendMsgBuf(0x202, 0, 8, statusEPS2);
     delay(10);    
