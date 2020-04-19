@@ -17,3 +17,6 @@ Pins 3, 4 and 5 control the fuel gauge using a PWM, through a DC motor driver, f
  - Pin 3 connects to pin 7 (in 2)
  - Pin 4 connects to pin 2 (in 1)
  - Pin 5 connects to pin 1 (enable)
+
+A PWM duty cycle of 0->100 indicates an empty tank
+A PWM duty cycle of 255 indicates a full tank
