@@ -16,18 +16,6 @@
 #define LED2 8
 #define LED3 7
 
-//Fuel Gauge -- designed to be used with L293D chip
-#define FUEL_GAUGE_ENABLE 5
-//need to tell the chip which way the current is flowing.
-//We're using 'direction A'
-#define FUEL_GAUGE_DIRECTIONA 3
-#define FUEL_GAUGE_DIRECTIONB 4
-
-//positions, (as indicated on the gauge)
-int FUEL_GAUGE_EMPTY=100;
-int FUEL_GAUGE_HALF=150;
-int FUEL_GAUGE_FULL=250;
-
 #define NOP __asm__ ("nop\n\t")
 
 // Variables for StatusMIL
@@ -40,10 +28,6 @@ bool lowWaterMIL;
 bool batChargeMIL;
 bool oilPressureMIL;
 
-// Variables for PCM
-byte engRPM;
-byte vehicleSpeed;
-
 // Variables for DSC
 bool dscOff;
 bool absMIL;
@@ -51,48 +35,42 @@ bool brakeFailMIL;
 bool etcActiveBL;
 bool etcDisabled;
 
-//READING THE RX8 PEDAL
-const int X_pin = 0; // analog pin connected to sensor 1
-const int Y_pin = 1; // analog pin connected to sensor 2
+//READING THE RX8 PEDAL. THis has 2 sensors, 1 and 2.
+const int pedal_1_pin = 0; // analog pin connected to sensor 1
+const int pedal_2_pin = 1; // analog pin connected to sensor 2
 
-int xReadingsCurve[] = {200, 550};
-int yReadingsCurve[] = {350, 550};
+const int fuelGauge1_pin = 2;
+const int fuelGauge2_pin = 3;
+
+int pedal1ReadingsCurve[] = {200, 550};
+int pedal2ReadingsCurve[] = {350, 550};
 
 MCP_CAN CAN0(10); // Set CS to pin 10
 
-void setup() 
+void setup()
 {
-    
+
     Serial.begin(9600);
     Serial.println("Init…");
     Serial.println("Setup pins");
-
-    //Pins for the fuel gauge. 2 Directions and 1 enable.
-    //Set dierection A as high
-    pinMode(FUEL_GAUGE_ENABLE,OUTPUT);
-    pinMode(FUEL_GAUGE_DIRECTIONA,OUTPUT);
-    pinMode(FUEL_GAUGE_DIRECTIONB,OUTPUT);
-    digitalWrite(FUEL_GAUGE_DIRECTIONA,HIGH); //one way
-    digitalWrite(FUEL_GAUGE_DIRECTIONB,LOW);
-
-    
     pinMode(LED2, OUTPUT);
     pinMode(LED3, OUTPUT);
     pinMode(CANint, INPUT);
-   
+    pinMode(fuelGauge1_pin, OUTPUT);
+    pinMode(fuelGauge2_pin, OUTPUT);
 
     //Serial.println("Enable pullups");
     digitalWrite(LED2, LOW);
     //Serial.println("CAN init:");
-    
-    if (CAN0.begin(CAN_500KBPS) == CAN_OK) 
+
+    if (CAN0.begin(CAN_500KBPS) == CAN_OK)
     {
         //Serial.println("OK!");
-    } 
-    else 
+    }
+    else
     {
         //Serial.println("fail :-(");
-        while (1) 
+        while (1)
         {
             //Serial.print("Zzz… ");
             delay(1000);
@@ -105,7 +83,7 @@ Serial.println("Good to go!");
 unsigned char stmp[8]       = {0, 0, 0, 0, 0, 0, 0, 0};                         // Always Off Array
 unsigned char otmp[8]       = {255,255,255,255,255,255,255,255};                // Always On Array
 
-unsigned char statusPCM[8]  = {125,0,0,0,156,0,0,0};                            // Write to 201
+unsigned char statusPCM[16] = {125,0,0,0,156,0,0,0};                            // Write to 201
 unsigned char statusMIL[8]  = {140,0,0,0,0,0,0,0};                              // Write to 420
 unsigned char statusDSC[8]  = {0,0,0,0,0,0,0,0};                                // Write to 212
 unsigned char statusPS[8]   = {0,0,0,0,0,0,0,0};                                // Write to 300
@@ -137,7 +115,7 @@ void updateMIL()
     statusMIL[0] = engTemp;
     statusMIL[1] = odo;
     statusMIL[4] = oilPressure;
-    
+
   if (checkEngineMIL == 1)
   {
     statusMIL[5] = statusMIL[5] | 0b01000000;
@@ -146,7 +124,7 @@ void updateMIL()
   {
     statusMIL[5] = statusMIL[5] & 0b10111111;
   }
-   
+
     if (checkEngineBL == 1)
   {
     statusMIL[5] = statusMIL[5] | 0b10000000;
@@ -184,10 +162,17 @@ void updateMIL()
   }
 }
 
-void updatePCM()
+void updatePCM(int engRPM, int vehicleSpeed)
 {
+    //Ints are 2 bytes, so extract the bytes using highByte & lowByte
     statusPCM[0] = engRPM;
+    //statusPCM[0] = lowByte(engRPM);
+    //statusPCM[1] = highByte(engRPM);
+
     statusPCM[4] = vehicleSpeed;
+    //statusPCM[4] = lowByte(vehicleSpeed);
+    //statusPCM[5] = highByte(vehicleSpeed);
+
 }
 
 void updatePS(bool on){
@@ -200,7 +185,7 @@ void updatePS(bool on){
 }
 
 void updateDSC()
-{       
+{
   if (dscOff == 1)
   {
     statusDSC[3] = statusDSC[3] | 0b00000100;
@@ -245,18 +230,20 @@ void updateDSC()
   {
     statusDSC[5] = statusDSC[5] & 0b11101111;
   }
- 
+
 
 }
 
-byte getSpeedMsgValue(int speed){
-  /* 
+int getSpeedMsgValue(int speed){
+  /*
    *  Create a value to send to the CAN bus for vehicle speed.
-   *  
+   *
    *  Pass in the required speed, returns the CAN code for that speed
-   *  
+   *
    *  Calculation is: 0.63*(Speed)+38.5
-   *  
+   *
+   *  For the sake of simplicity, this calculation returns an int.
+   *  TODO: Is this a sensible solution?
    */
   float multiplier=0.63;
   float constant=38.5;
@@ -266,10 +253,10 @@ byte getSpeedMsgValue(int speed){
  // Serial.print("Vehicle Speed: ");
  // Serial.println(speedCode);
 
-  return speedCode;
+  return int(speedCode);
 }
 
-byte getRPMMsgValue(int RPM){
+int getRPMMsgValue(int RPM){
   /*
   * Create the correct CAN code for the given RMP
   */
@@ -290,8 +277,8 @@ int convertAccReadingToRPM(int reading){
    */
 
    //Find the domain by subtracting the min from the max of the domain list
-   int domainMin = xReadingsCurve[0];
-   int domainMax = xReadingsCurve[1];
+   int domainMin = pedal1ReadingsCurve[0];
+   int domainMax = pedal1ReadingsCurve[1];
 
    int domain = domainMax - domainMin;
 
@@ -309,14 +296,20 @@ int convertAccReadingToRPM(int reading){
 
    Serial.println(rpm);
    return int(rpm);
-   
+
 }
 
-void loop() 
+void loop()
 {
 
-    int xReading = analogRead(X_pin);
-    int yReading = analogRead(Y_pin);
+    //THe RX-8 pedal produces 2 readings when pressed. This stores both readings.
+    //The ECU compares the 2 readings to make sure the pedal's working properly.
+    //For testing purposes, we are just using 1 of the 2 readings (Reading 1)
+    int pedalReading1 = analogRead(pedal_1_pin);
+    Serial.println(pedalReading1);
+    int pedalReading2 = analogRead(pedal_2_pin);
+
+
     // StatusMIL
     engTemp         = 145;
     odo             = 0;
@@ -331,14 +324,15 @@ void loop()
     CAN0.sendMsgBuf(0x420, 0, 8, statusMIL);
     delay(10);
 
-
     // StatusPCM
-    int rpm         = convertAccReadingToRPM(xReading);  //calculate the rpm to send to the can
-    engRPM          = getRPMMsgValue(rpm);    // RPM  Value*67 gives 8500 RPM Reading Redline is 127
-    vehicleSpeed    = getSpeedMsgValue(90);    // Speed  Value=0.63*(Speed)+38.5
+    int rpm         = convertAccReadingToRPM(pedalReading1);  //calculate the rpm to send to the can
+    int engRPM          = getRPMMsgValue(rpm);    // RPM  Value*67 gives 8500 RPM Reading Redline is 127
+    int vehicleSpeed    = getSpeedMsgValue(188);    // Speed  Value=0.63*(Speed)+38.5. Max speed is 188 before gauge stops reporting
 
-    updatePCM();
-    CAN0.sendMsgBuf(0x201, 0, 8, statusPCM);          //CAN0.sendMsgBuf(CAN_ID, Data Type (normally 0), length of data, Data
+    updatePCM(engRPM, vehicleSpeed);
+
+    CAN0.sendMsgBuf(0x201, 0, 8, statusPCM); //CAN0.sendMsgBuf(CAN_ID, Data Type (normally 0), length of data, Data
+
     delay(10);
 
     // StatusDSC
@@ -356,24 +350,24 @@ void loop()
     CAN0.sendMsgBuf(0x300, 0, 8, statusPS);
     delay(10);
 
-    analogWrite(FUEL_GAUGE_ENABLE,FUEL_GAUGE_HALF); //half speed
-
+    analogWrite(fuelGauge1_pin, 0);
+    analogWrite(fuelGauge2_pin, 0);
 /*
     CAN0.sendMsgBuf(0x202, 0, 8, statusEPS2);
-    delay(10);    
-           
-    
+    delay(10);
+
+
     CAN0.sendMsgBuf(0x215, 0, 8, statusECU1);
-    delay(10);  
+    delay(10);
 
     CAN0.sendMsgBuf(0x231, 0, 8, statusECU2);
-    delay(10);  
+    delay(10);
 
     CAN0.sendMsgBuf(0x240, 0, 8, statusECU3);
-    delay(10);  
+    delay(10);
     CAN0.sendMsgBuf(0x250, 0, 8, statusECU4);
-    delay(10);  
+    delay(10);
 
 */
-            
+
  }
