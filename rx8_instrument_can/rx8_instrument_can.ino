@@ -80,21 +80,21 @@ void setup()
 Serial.println("Good to go!");
 }
 
-unsigned char stmp[8]       = {0, 0, 0, 0, 0, 0, 0, 0};                         // Always Off Array
-unsigned char otmp[8]       = {255,255,255,255,255,255,255,255};                // Always On Array
+byte stmp[8]       = {0, 0, 0, 0, 0, 0, 0, 0};                         // Always Off Array
+byte otmp[8]       = {255,255,255,255,255,255,255,255};                // Always On Array
 
-unsigned char statusPCM[16] = {125,0,0,0,156,0,0,0};                            // Write to 201
-unsigned char statusMIL[8]  = {140,0,0,0,0,0,0,0};                              // Write to 420
-unsigned char statusDSC[8]  = {0,0,0,0,0,0,0,0};                                // Write to 212
-unsigned char statusPS[8]   = {0,0,0,0,0,0,0,0};                                // Write to 300
+byte statusPCM[16] = {125,0,0,0,156,0,0,0};                            // Write to 201
+byte statusMIL[8]  = {140,0,0,0,0,0,0,0};                              // Write to 420
+byte statusDSC[8]  = {0,0,0,0,0,0,0,0};                                // Write to 212
+byte statusPS[8]   = {0,0,0,0,0,0,0,0};                                // Write to 300
 
-unsigned char statusEPS1[8] = {0x00,0x00,0xFF,0xFF,0x00,0x32,0x06,0x81};        // Write to 200 0x00 00 FF FF 00 32 06 81
-unsigned char statusEPS2[8] = {0x89,0x89,0x89,0x19,0x34,0x1F,0xC8,0xFF};        // Write to 202 0x89 89 89 19 34 1F C8 FF
+byte statusEPS1[8] = {0x00,0x00,0xFF,0xFF,0x00,0x32,0x06,0x81};        // Write to 200 0x00 00 FF FF 00 32 06 81
+byte statusEPS2[8] = {0x89,0x89,0x89,0x19,0x34,0x1F,0xC8,0xFF};        // Write to 202 0x89 89 89 19 34 1F C8 FF
 
-unsigned char statusECU1[8] = {0x02,0x2D,0x02,0x2D,0x02,0x2A,0x06,0x81};        // Write to 215 - Unknown
-unsigned char statusECU2[8] = {0x0F,0x00,0xFF,0xFF,0x02,0x2D,0x06,0x81};        // Write to 231 - Unknown
-unsigned char statusECU3[8] = {0x04,0x00,0x28,0x00,0x02,0x37,0x06,0x81};        // Write to 240 - Unknown
-unsigned char statusECU4[8] = {0x00,0x00,0xCF,0x87,0x7F,0x83,0x00,0x00};        // Write to 250 - Unknown
+byte statusECU1[8] = {0x02,0x2D,0x02,0x2D,0x02,0x2A,0x06,0x81};        // Write to 215 - Unknown
+byte statusECU2[8] = {0x0F,0x00,0xFF,0xFF,0x02,0x2D,0x06,0x81};        // Write to 231 - Unknown
+byte statusECU3[8] = {0x04,0x00,0x28,0x00,0x02,0x37,0x06,0x81};        // Write to 240 - Unknown
+byte statusECU4[8] = {0x00,0x00,0xCF,0x87,0x7F,0x83,0x00,0x00};        // Write to 250 - Unknown
 
 
 /*
@@ -162,17 +162,17 @@ void updateMIL()
   }
 }
 
-void updatePCM(int engRPM, int vehicleSpeed)
+void updatePCM(byte engRPM, byte vehicleSpeed)
 {
-    //Ints are 2 bytes, so extract the bytes using highByte & lowByte
+
+    //The 2nd byte for each reading (1 and 4) are for
+    //greater definition. THe first byte is what makes the gauges active
+
     statusPCM[0] = engRPM;
-    //statusPCM[0] = lowByte(engRPM);
-    //statusPCM[1] = highByte(engRPM);
-
+    statusPCM[1] = 0; // what should this be?
+  
     statusPCM[4] = vehicleSpeed;
-    //statusPCM[4] = lowByte(vehicleSpeed);
-    //statusPCM[5] = highByte(vehicleSpeed);
-
+    statusPCM[5] = byte(135); //WHy is this 135???
 }
 
 void updatePS(bool on){
@@ -234,7 +234,7 @@ void updateDSC()
 
 }
 
-int getSpeedMsgValue(int speed){
+byte getSpeedMsgValue(byte speed){
   /*
    *  Create a value to send to the CAN bus for vehicle speed.
    *
@@ -245,7 +245,8 @@ int getSpeedMsgValue(int speed){
    *  For the sake of simplicity, this calculation returns an int.
    *  TODO: Is this a sensible solution?
    */
-  float multiplier=0.63;
+  //float multiplier=0.63;
+  float multiplier=0.621371; // this is the kph calculation. 
   float constant=38.5;
   float speedCode;
 
@@ -253,16 +254,16 @@ int getSpeedMsgValue(int speed){
  // Serial.print("Vehicle Speed: ");
  // Serial.println(speedCode);
 
-  return int(speedCode);
+  return byte(speedCode);
 }
 
-int getRPMMsgValue(int RPM){
+byte getRPMMsgValue(int RPM){
   /*
   * Create the correct CAN code for the given RMP
   */
   float multiplier=65;
 
-  int RPMCode=int(RPM/multiplier);
+  byte RPMCode=byte(RPM/multiplier);
  //Serial.print("RPM: ");
  // Serial.println(RPMCode);
 
@@ -325,10 +326,10 @@ void loop()
     delay(10);
 
     // StatusPCM
-    int rpm         = convertAccReadingToRPM(pedalReading1);  //calculate the rpm to send to the can
-    int engRPM          = getRPMMsgValue(rpm);    // RPM  Value*67 gives 8500 RPM Reading Redline is 127
-    int vehicleSpeed    = getSpeedMsgValue(188);    // Speed  Value=0.63*(Speed)+38.5. Max speed is 188 before gauge stops reporting
-
+    int rpm              = convertAccReadingToRPM(pedalReading1);  //calculate the rpm to send to the can
+    byte engRPM          = getRPMMsgValue(rpm);    // RPM  Value*67 gives 8500 RPM Reading Redline is 127
+    byte vehicleSpeed    = getSpeedMsgValue(100);    // Speed  Value=0.63*(Speed)+38.5. Max speed is 188 before gauge stops reporting
+    
     updatePCM(engRPM, vehicleSpeed);
 
     CAN0.sendMsgBuf(0x201, 0, 8, statusPCM); //CAN0.sendMsgBuf(CAN_ID, Data Type (normally 0), length of data, Data
